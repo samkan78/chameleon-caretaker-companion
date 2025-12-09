@@ -1,13 +1,39 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+/**
+ * Index Page - Virtual Chameleon Pet Game
+ * Main entry point that renders either the welcome screen or game dashboard
+ * 
+ * FBLA Introduction to Programming 2025
+ * Topic: Build a Virtual Pet with Cost of Care System
+ */
+
+import { useGameState } from '@/hooks/useGameState';
+import { WelcomeScreen } from '@/components/pet/WelcomeScreen';
+import { GameDashboard } from '@/components/pet/GameDashboard';
 
 const Index = () => {
+  const {
+    gameState,
+    initializePet,
+    performAction,
+    earnMoney,
+    teachTrick,
+    resetGame,
+  } = useGameState();
+
+  // Show welcome screen if no pet has been created
+  if (gameState.isFirstTime || !gameState.pet.name) {
+    return <WelcomeScreen onStart={initializePet} />;
+  }
+
+  // Show main game dashboard
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
+    <GameDashboard
+      gameState={gameState}
+      onAction={performAction}
+      onEarnMoney={earnMoney}
+      onTeachTrick={teachTrick}
+      onReset={resetGame}
+    />
   );
 };
 
