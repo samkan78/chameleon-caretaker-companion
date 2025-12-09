@@ -1,11 +1,11 @@
 /**
  * GameDashboard Component
- * Main game interface showing pet, stats, actions, and management panels
- * Organized into logical sections for easy navigation
+ * Main game interface - compact, game-focused layout with minimal scrolling
+ * Features tabbed navigation for all game features
  */
 
 import { useState } from 'react';
-import { GameState } from '@/types/pet';
+import { GameState, VET_SERVICES, EVOLUTION_STAGES } from '@/types/pet';
 import { Chameleon } from './Chameleon';
 import { StatsDisplay } from './StatsDisplay';
 import { ActionButtons } from './ActionButtons';
@@ -13,22 +13,25 @@ import { FinancePanel } from './FinancePanel';
 import { ChoresPanel } from './ChoresPanel';
 import { BadgesPanel } from './BadgesPanel';
 import { TricksPanel } from './TricksPanel';
+import { HealthcarePanel } from './HealthcarePanel';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface GameDashboardProps {
   gameState: GameState;
   onAction: (action: string) => boolean;
+  onVetService: (serviceType: keyof typeof VET_SERVICES) => boolean;
   onEarnMoney: (amount: number, choreId: string) => void;
   onTeachTrick: (trickName: string) => boolean;
   onReset: () => void;
 }
 
-type Tab = 'care' | 'money' | 'tricks' | 'badges';
+type Tab = 'care' | 'health' | 'money' | 'progress';
 
 export function GameDashboard({
   gameState,
   onAction,
+  onVetService,
   onEarnMoney,
   onTeachTrick,
   onReset,
@@ -38,31 +41,34 @@ export function GameDashboard({
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: 'care', label: 'Care', icon: '❤️' },
+    { id: 'health', label: 'Health', icon: '🩺' },
     { id: 'money', label: 'Money', icon: '💰' },
-    { id: 'tricks', label: 'Tricks', icon: '🎪' },
-    { id: 'badges', label: 'Badges', icon: '⭐' },
+    { id: 'progress', label: 'Progress', icon: '⭐' },
   ];
 
+  const stageInfo = EVOLUTION_STAGES[gameState.pet.evolutionStage];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
-        <div className="container max-w-6xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🦎</span>
-              <div>
-                <h1 className="font-display font-bold text-lg text-foreground">
+    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background flex flex-col">
+      {/* Compact Header */}
+      <header className="sticky top-0 z-50 bg-background/90 backdrop-blur-lg border-b border-border">
+        <div className="container max-w-5xl mx-auto px-3 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-xl">🦎</span>
+              <div className="min-w-0">
+                <h1 className="font-display font-bold text-sm text-foreground truncate">
                   {gameState.pet.name}
                 </h1>
-                <p className="text-xs text-muted-foreground capitalize">
-                  Feeling {gameState.pet.mood}
+                <p className="text-[10px] text-muted-foreground">
+                  {stageInfo.name} • Day {gameState.pet.age + 1}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
-                <span className="font-display font-bold text-primary">
+            
+            <div className="flex items-center gap-2">
+              <div className="px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20">
+                <span className="font-display font-bold text-primary text-sm">
                   💰 ${gameState.finances.balance}
                 </span>
               </div>
@@ -70,82 +76,90 @@ export function GameDashboard({
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowResetConfirm(true)}
-                className="text-muted-foreground hover:text-destructive"
+                className="text-muted-foreground hover:text-destructive h-8 px-2"
               >
-                ↻ Reset
+                ↻
               </Button>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="container max-w-6xl mx-auto px-4 py-6">
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left Column - Pet Display & Stats */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Pet Display */}
-            <div className="bg-card rounded-3xl shadow-card border-2 border-border p-6 overflow-hidden">
+      {/* Main Content - Game Layout */}
+      <main className="flex-1 container max-w-5xl mx-auto px-3 py-3">
+        <div className="grid lg:grid-cols-5 gap-3 h-full">
+          
+          {/* Left Column - Pet & Stats (Compact) */}
+          <div className="lg:col-span-2 flex flex-col gap-3">
+            {/* Pet Display Card */}
+            <div className="bg-card rounded-2xl shadow-card border border-border p-3 flex-shrink-0">
               <div 
-                className="rounded-2xl p-6 transition-all duration-700"
+                className="rounded-xl p-4 transition-all duration-700 flex items-center justify-center"
                 style={{
                   background: `linear-gradient(180deg, ${gameState.pet.color}15 0%, ${gameState.pet.color}05 100%)`,
+                  minHeight: '180px',
                 }}
               >
                 <Chameleon
                   mood={gameState.pet.mood}
                   color={gameState.pet.color}
                   name={gameState.pet.name}
+                  type={gameState.pet.type}
+                  evolutionStage={gameState.pet.evolutionStage}
+                  reaction={gameState.pet.currentReaction}
                 />
               </div>
               
-              {/* Quick mood indicator */}
-              <div className="mt-4 text-center">
+              {/* Quick mood status */}
+              <div className="mt-2 text-center">
                 <span 
-                  className="inline-block px-4 py-2 rounded-full font-display font-semibold text-sm capitalize"
+                  className="inline-block px-3 py-1 rounded-full font-display font-semibold text-xs capitalize"
                   style={{
                     backgroundColor: `${gameState.pet.color}20`,
                     color: gameState.pet.color,
                   }}
                 >
-                  {gameState.pet.mood === 'happy' && '😊 Happy & Content'}
-                  {gameState.pet.mood === 'sad' && '😢 Needs Attention'}
-                  {gameState.pet.mood === 'sick' && '🤒 Not Feeling Well'}
-                  {gameState.pet.mood === 'energetic' && '⚡ Full of Energy'}
-                  {gameState.pet.mood === 'tired' && '😴 Needs Rest'}
-                  {gameState.pet.mood === 'neutral' && '😐 Doing Okay'}
+                  {gameState.pet.mood === 'happy' && '😊 Happy'}
+                  {gameState.pet.mood === 'sad' && '😢 Sad'}
+                  {gameState.pet.mood === 'sick' && '🤒 Sick'}
+                  {gameState.pet.mood === 'energetic' && '⚡ Energetic'}
+                  {gameState.pet.mood === 'tired' && '😴 Tired'}
+                  {gameState.pet.mood === 'neutral' && '😐 Okay'}
+                  {gameState.pet.mood === 'hungry' && '🍽️ Hungry'}
+                  {gameState.pet.mood === 'dirty' && '🫧 Needs Bath'}
                 </span>
               </div>
             </div>
 
-            {/* Stats Panel */}
-            <div className="bg-card rounded-3xl shadow-card border-2 border-border p-6">
-              <StatsDisplay stats={gameState.pet.stats} />
+            {/* Stats Panel (Compact) */}
+            <div className="bg-card rounded-2xl shadow-card border border-border p-3">
+              <StatsDisplay stats={gameState.pet.stats} compact />
             </div>
           </div>
 
           {/* Right Column - Tabbed Content */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-3 flex flex-col gap-2">
             {/* Tab Navigation */}
-            <div className="flex gap-2 p-1 bg-muted/50 rounded-2xl">
+            <div className="flex gap-1 p-1 bg-muted/50 rounded-xl shrink-0">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    "flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-display font-semibold transition-all duration-200",
+                    "flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-display font-semibold text-sm transition-all duration-200",
                     activeTab === tab.id
-                      ? "bg-card shadow-md text-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      ? "bg-card shadow-sm text-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   )}
                 >
-                  <span>{tab.icon}</span>
+                  <span className="text-base">{tab.icon}</span>
                   <span className="hidden sm:inline">{tab.label}</span>
                 </button>
               ))}
             </div>
 
             {/* Tab Content */}
-            <div className="bg-card rounded-3xl shadow-card border-2 border-border p-6 animate-fade-in-up">
+            <div className="bg-card rounded-2xl shadow-card border border-border p-4 flex-1 overflow-auto">
               {activeTab === 'care' && (
                 <ActionButtons
                   onAction={onAction}
@@ -153,72 +167,71 @@ export function GameDashboard({
                 />
               )}
 
+              {activeTab === 'health' && (
+                <HealthcarePanel
+                  health={gameState.pet.stats.health}
+                  balance={gameState.finances.balance}
+                  vetHistory={gameState.pet.vetHistory}
+                  lastVetVisit={gameState.pet.lastVetVisit}
+                  onVetService={onVetService}
+                />
+              )}
+
               {activeTab === 'money' && (
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid md:grid-cols-2 gap-4">
                   <ChoresPanel onCompleteChore={onEarnMoney} />
                   <FinancePanel finances={gameState.finances} />
                 </div>
               )}
 
-              {activeTab === 'tricks' && (
-                <TricksPanel
-                  learnedTricks={gameState.pet.tricks}
-                  energy={gameState.pet.stats.energy}
-                  onTeachTrick={onTeachTrick}
-                />
-              )}
-
-              {activeTab === 'badges' && (
-                <BadgesPanel earnedBadges={gameState.badges} />
-              )}
-            </div>
-
-            {/* Help Section */}
-            <div className="bg-primary/5 rounded-2xl border border-primary/20 p-4">
-              <details className="group">
-                <summary className="flex items-center justify-between cursor-pointer list-none">
-                  <span className="font-display font-semibold text-primary">
-                    📖 How to Play
-                  </span>
-                  <span className="text-primary group-open:rotate-180 transition-transform">
-                    ▼
-                  </span>
-                </summary>
-                <div className="mt-4 space-y-3 text-sm text-muted-foreground">
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="p-3 bg-card rounded-xl">
-                      <h4 className="font-semibold text-foreground mb-1">🎯 Goal</h4>
-                      <p>Keep your chameleon happy and healthy while managing expenses responsibly.</p>
-                    </div>
-                    <div className="p-3 bg-card rounded-xl">
-                      <h4 className="font-semibold text-foreground mb-1">❤️ Care</h4>
-                      <p>Use the Care tab to feed, play, rest, clean, and provide medical care.</p>
-                    </div>
-                    <div className="p-3 bg-card rounded-xl">
-                      <h4 className="font-semibold text-foreground mb-1">💰 Money</h4>
-                      <p>Complete chores to earn money for pet care. Track your spending!</p>
-                    </div>
-                    <div className="p-3 bg-card rounded-xl">
-                      <h4 className="font-semibold text-foreground mb-1">🎨 Colors</h4>
-                      <p>Watch your chameleon change colors based on its mood!</p>
-                    </div>
+              {activeTab === 'progress' && (
+                <div className="space-y-4">
+                  <TricksPanel
+                    learnedTricks={gameState.pet.tricks}
+                    energy={gameState.pet.stats.energy}
+                    onTeachTrick={onTeachTrick}
+                  />
+                  <div className="border-t border-border pt-4">
+                    <BadgesPanel earnedBadges={gameState.badges} />
                   </div>
                 </div>
-              </details>
+              )}
             </div>
+
+            {/* Quick Help */}
+            <details className="bg-primary/5 rounded-xl border border-primary/20 p-3 shrink-0">
+              <summary className="flex items-center justify-between cursor-pointer list-none text-sm">
+                <span className="font-display font-semibold text-primary">📖 How to Play</span>
+                <span className="text-primary text-xs">▼</span>
+              </summary>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                <div className="p-2 bg-card rounded-lg">
+                  <span className="font-semibold text-foreground">❤️ Care:</span> Feed, play, clean
+                </div>
+                <div className="p-2 bg-card rounded-lg">
+                  <span className="font-semibold text-foreground">🩺 Health:</span> Vet visits
+                </div>
+                <div className="p-2 bg-card rounded-lg">
+                  <span className="font-semibold text-foreground">💰 Money:</span> Chores → earnings
+                </div>
+                <div className="p-2 bg-card rounded-lg">
+                  <span className="font-semibold text-foreground">📈 Grow:</span> Stats → evolution
+                </div>
+              </div>
+            </details>
           </div>
         </div>
       </main>
 
       {/* Reset Confirmation Modal */}
       {showResetConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/20 backdrop-blur-sm animate-fade-in-up">
-          <div className="bg-card rounded-2xl shadow-xl border-2 border-border p-6 max-w-sm w-full animate-scale-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/20 backdrop-blur-sm">
+          <div className="bg-card rounded-2xl shadow-xl border-2 border-border p-5 max-w-sm w-full animate-scale-in">
             <h3 className="font-display font-bold text-lg text-foreground mb-2">
               Reset Game?
             </h3>
-            <p className="text-muted-foreground mb-6">
-              This will delete all progress including your pet, money, and badges. This cannot be undone.
+            <p className="text-sm text-muted-foreground mb-5">
+              This will delete all progress. This cannot be undone.
             </p>
             <div className="flex gap-3">
               <Button
@@ -243,10 +256,10 @@ export function GameDashboard({
         </div>
       )}
 
-      {/* Footer */}
-      <footer className="border-t border-border mt-8 py-4">
-        <p className="text-center text-xs text-muted-foreground">
-          Virtual Chameleon Pet • FBLA Introduction to Programming 2025
+      {/* Minimal Footer */}
+      <footer className="border-t border-border py-2 shrink-0">
+        <p className="text-center text-[10px] text-muted-foreground">
+          Virtual Chameleon Pet • FBLA 2025
         </p>
       </footer>
     </div>
