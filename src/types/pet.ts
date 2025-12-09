@@ -3,8 +3,52 @@
  * Defines all data structures for the Virtual Chameleon Pet application
  */
 
+// Chameleon species types available for selection
+export type ChameleonType = 'veiled' | 'panther' | 'jackson';
+
+// Species display info
+export const CHAMELEON_TYPES: Record<ChameleonType, { 
+  name: string; 
+  description: string; 
+  baseColor: string;
+  pattern: 'striped' | 'spotted' | 'gradient';
+  icon: string;
+}> = {
+  veiled: {
+    name: 'Veiled Chameleon',
+    description: 'Hardy & colorful with a tall casque',
+    baseColor: '#2ECC71',
+    pattern: 'striped',
+    icon: '🌿',
+  },
+  panther: {
+    name: 'Panther Chameleon',
+    description: 'Vibrant colors & bold personality',
+    baseColor: '#3498DB',
+    pattern: 'spotted',
+    icon: '🐆',
+  },
+  jackson: {
+    name: "Jackson's Chameleon",
+    description: 'Three-horned & gentle natured',
+    baseColor: '#27AE60',
+    pattern: 'gradient',
+    icon: '🦕',
+  },
+};
+
+// Evolution stages with size multipliers
+export const EVOLUTION_STAGES = {
+  1: { name: 'Hatchling', sizeMultiplier: 0.6, minAge: 0 },
+  2: { name: 'Juvenile', sizeMultiplier: 0.8, minAge: 3 },
+  3: { name: 'Adult', sizeMultiplier: 1.0, minAge: 7 },
+} as const;
+
 // Possible mood states for the chameleon
-export type PetMood = 'happy' | 'sad' | 'sick' | 'energetic' | 'tired' | 'neutral';
+export type PetMood = 'happy' | 'sad' | 'sick' | 'energetic' | 'tired' | 'neutral' | 'hungry' | 'dirty';
+
+// Reaction types for animations
+export type ReactionType = 'love' | 'eating' | 'playing' | 'sleeping' | 'healing' | 'sparkle' | 'none';
 
 // Pet statistics interface - tracks all vital stats
 export interface PetStats {
@@ -45,16 +89,30 @@ export interface Badge {
   requirement: string;
 }
 
+// Vet appointment record
+export interface VetRecord {
+  id: string;
+  type: 'checkup' | 'vaccination' | 'treatment' | 'emergency';
+  description: string;
+  cost: number;
+  date: Date;
+  healthBoost: number;
+}
+
 // Main pet state interface
 export interface Pet {
   name: string;
+  type: ChameleonType;
   stats: PetStats;
   mood: PetMood;
   age: number; // in days
   createdAt: Date;
-  evolutionStage: number; // 1 = baby, 2 = teen, 3 = adult
+  evolutionStage: 1 | 2 | 3;
   tricks: string[];
   color: string; // current chameleon color based on mood
+  currentReaction: ReactionType;
+  vetHistory: VetRecord[];
+  lastVetVisit?: Date;
 }
 
 // Player/user financial state
@@ -75,6 +133,7 @@ export interface GameState {
   completedChores: string[];
   lastUpdated: Date;
   isFirstTime: boolean;
+  totalPlayTime: number; // minutes
 }
 
 // Action costs for various pet care activities
@@ -83,10 +142,49 @@ export const ACTION_COSTS: Record<string, { cost: number; category: Expense['cat
   treat: { cost: 8, category: 'food', description: 'Special treat' },
   play: { cost: 3, category: 'toy', description: 'Play session' },
   newToy: { cost: 15, category: 'toy', description: 'New toy' },
-  vetVisit: { cost: 25, category: 'health', description: 'Vet checkup' },
+  checkup: { cost: 25, category: 'health', description: 'Routine checkup' },
+  vaccination: { cost: 35, category: 'health', description: 'Vaccination' },
+  treatment: { cost: 20, category: 'health', description: 'Health treatment' },
+  emergency: { cost: 50, category: 'health', description: 'Emergency care' },
   medicine: { cost: 12, category: 'health', description: 'Medicine' },
   bath: { cost: 8, category: 'grooming', description: 'Bath supplies' },
   bedding: { cost: 10, category: 'supplies', description: 'Fresh bedding' },
+};
+
+// Vet services available
+export const VET_SERVICES = {
+  checkup: { 
+    name: 'Routine Checkup', 
+    cost: 25, 
+    healthBoost: 30, 
+    description: 'General health examination',
+    icon: '🩺',
+    cooldownHours: 4,
+  },
+  vaccination: { 
+    name: 'Vaccination', 
+    cost: 35, 
+    healthBoost: 15, 
+    description: 'Preventive immunization',
+    icon: '💉',
+    cooldownHours: 24,
+  },
+  treatment: { 
+    name: 'Treatment', 
+    cost: 20, 
+    healthBoost: 40, 
+    description: 'Medicine and care',
+    icon: '💊',
+    cooldownHours: 2,
+  },
+  emergency: { 
+    name: 'Emergency Care', 
+    cost: 50, 
+    healthBoost: 60, 
+    description: 'Urgent medical attention',
+    icon: '🚑',
+    cooldownHours: 0, // No cooldown for emergencies
+  },
 };
 
 // Available chores to earn money
@@ -96,6 +194,7 @@ export const AVAILABLE_CHORES: Chore[] = [
   { id: 'dishes', name: 'Wash Dishes', description: 'Clean the dishes', reward: 8, cooldownMinutes: 20, icon: '🍽️' },
   { id: 'laundry', name: 'Do Laundry', description: 'Wash and fold clothes', reward: 12, cooldownMinutes: 45, icon: '👕' },
   { id: 'yard_work', name: 'Yard Work', description: 'Help with outdoor tasks', reward: 20, cooldownMinutes: 90, icon: '🌱' },
+  { id: 'pet_care', name: 'Help with Pets', description: 'Assist with family pets', reward: 10, cooldownMinutes: 40, icon: '🐾' },
 ];
 
 // Available badges
@@ -108,29 +207,48 @@ export const AVAILABLE_BADGES: Badge[] = [
   { id: 'hard_worker', name: 'Super Helper', description: 'Complete 10 chores', icon: '⭐', requirement: 'Do 10 chores' },
   { id: 'healthy_pet', name: 'Health Hero', description: 'Keep health at 100% for 5 minutes', icon: '❤️', requirement: 'Maintain perfect health' },
   { id: 'trick_master', name: 'Trick Trainer', description: 'Teach your pet 3 tricks', icon: '🎪', requirement: 'Train 3 tricks' },
+  { id: 'vet_regular', name: 'Vet Regular', description: 'Visit the vet 5 times', icon: '🩺', requirement: 'Complete 5 vet visits' },
+  { id: 'evolution_1', name: 'Growing Up', description: 'Your pet evolved to juvenile', icon: '🌱', requirement: 'Reach juvenile stage' },
+  { id: 'evolution_2', name: 'All Grown Up', description: 'Your pet evolved to adult', icon: '🌳', requirement: 'Reach adult stage' },
 ];
 
 // Helper function to determine mood based on stats
 export function calculateMood(stats: PetStats): PetMood {
-  const average = (stats.hunger + stats.happiness + stats.health + stats.energy + stats.cleanliness) / 5;
-  
-  if (stats.health < 30) return 'sick';
-  if (stats.energy < 20) return 'tired';
-  if (stats.happiness < 30) return 'sad';
-  if (stats.energy > 80 && stats.happiness > 70) return 'energetic';
-  if (average > 70) return 'happy';
+  // Priority-based mood calculation
+  if (stats.health < 25) return 'sick';
+  if (stats.hunger < 20) return 'hungry';
+  if (stats.cleanliness < 20) return 'dirty';
+  if (stats.energy < 15) return 'tired';
+  if (stats.happiness < 25) return 'sad';
+  if (stats.energy > 80 && stats.happiness > 75) return 'energetic';
+  if (stats.happiness > 70 && stats.hunger > 60 && stats.health > 70) return 'happy';
   return 'neutral';
 }
 
 // Get chameleon color based on mood
-export function getMoodColor(mood: PetMood): string {
+export function getMoodColor(mood: PetMood, baseColor?: string): string {
   const colors: Record<PetMood, string> = {
     happy: '#FFD93D',      // Bright yellow
     sad: '#6B7FD7',        // Soft blue
     sick: '#9B59B6',       // Purple
     energetic: '#FF6B35',  // Vibrant orange
     tired: '#74B9FF',      // Light blue
-    neutral: '#2ECC71',    // Green
+    neutral: baseColor || '#2ECC71', // Green or base
+    hungry: '#E67E22',     // Orange-brown
+    dirty: '#8B7355',      // Muddy brown
   };
   return colors[mood];
+}
+
+// Get evolution stage based on age
+export function getEvolutionStage(age: number): 1 | 2 | 3 {
+  if (age >= 7) return 3;
+  if (age >= 3) return 2;
+  return 1;
+}
+
+// Calculate age in days from creation date and play time
+export function calculateAge(createdAt: Date, totalPlayTime: number): number {
+  // 1 in-game day = 5 minutes of play time
+  return Math.floor(totalPlayTime / 5);
 }
