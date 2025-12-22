@@ -1,267 +1,327 @@
 /**
  * GameDashboard Component
- * Main game interface - compact, game-focused layout with minimal scrolling
- * Features tabbed navigation for all game features
+ * Main game interface with pet centered, stats above, actions below
+ * Designed as a game screen with minimal scrolling
  */
 
 import { useState } from 'react';
-import { GameState, VET_SERVICES, EVOLUTION_STAGES } from '@/types/pet';
+import { GameState, ACTION_COSTS, AVAILABLE_CHORES, VET_SERVICES } from '@/types/pet';
 import { Chameleon } from './Chameleon';
 import { StatsDisplay } from './StatsDisplay';
-import { ActionButtons } from './ActionButtons';
-import { FinancePanel } from './FinancePanel';
-import { ChoresPanel } from './ChoresPanel';
-import { BadgesPanel } from './BadgesPanel';
-import { TricksPanel } from './TricksPanel';
-import { HealthcarePanel } from './HealthcarePanel';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Coins, RotateCcw, Sparkles, Heart, Utensils, Gamepad2, Bath, Moon, Stethoscope, Siren, Pill } from 'lucide-react';
 
-interface GameDashboardProps {
+export interface GameDashboardProps {
   gameState: GameState;
   onAction: (action: string) => boolean;
-  onVetService: (serviceType: keyof typeof VET_SERVICES) => boolean;
   onEarnMoney: (amount: number, choreId: string) => void;
+  onVetService: (serviceType: 'checkup' | 'vaccination' | 'treatment' | 'emergency') => boolean;
   onTeachTrick: (trickName: string) => boolean;
   onReset: () => void;
 }
 
-type Tab = 'care' | 'health' | 'money' | 'progress';
+// Available tricks to teach
+const AVAILABLE_TRICKS = [
+  { name: 'Wave', icon: '👋', energy: 20 },
+  { name: 'Spin', icon: '🔄', energy: 25 },
+  { name: 'Color Flash', icon: '🌈', energy: 30 },
+  { name: 'Tongue Catch', icon: '👅', energy: 20 },
+  { name: 'Hide', icon: '🫥', energy: 15 },
+];
 
 export function GameDashboard({
   gameState,
   onAction,
-  onVetService,
   onEarnMoney,
+  onVetService,
   onTeachTrick,
   onReset,
 }: GameDashboardProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('care');
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const { pet, finances, badges } = gameState;
+  const [activeTab, setActiveTab] = useState<'care' | 'health' | 'earn' | 'tricks'>('care');
+  const [showResetDialog, setShowResetDialog] = useState(false);
 
-  const tabs: { id: Tab; label: string; icon: string }[] = [
-    { id: 'care', label: 'Care', icon: '❤️' },
-    { id: 'health', label: 'Health', icon: '🩺' },
-    { id: 'money', label: 'Money', icon: '💰' },
-    { id: 'progress', label: 'Progress', icon: '⭐' },
+  // Chore cooldown tracking
+  const [choreCooldowns, setChoreCooldowns] = useState<Record<string, number>>({});
+
+  const handleChore = (chore: typeof AVAILABLE_CHORES[0]) => {
+    const now = Date.now();
+    const lastDone = choreCooldowns[chore.id] || 0;
+    const cooldownMs = chore.cooldownMinutes * 60 * 1000;
+    
+    if (now - lastDone < cooldownMs) return;
+    
+    onEarnMoney(chore.reward, chore.id);
+    setChoreCooldowns(prev => ({ ...prev, [chore.id]: now }));
+  };
+
+  const getChoreTimeLeft = (chore: typeof AVAILABLE_CHORES[0]) => {
+    const now = Date.now();
+    const lastDone = choreCooldowns[chore.id] || 0;
+    const cooldownMs = chore.cooldownMinutes * 60 * 1000;
+    const timeLeft = Math.max(0, cooldownMs - (now - lastDone));
+    return Math.ceil(timeLeft / 60000);
+  };
+
+  // Care actions configuration
+  const careActions = [
+    { id: 'feed', icon: Utensils, label: 'Feed', cost: ACTION_COSTS.feed.cost },
+    { id: 'treat', icon: Sparkles, label: 'Treat', cost: ACTION_COSTS.treat.cost },
+    { id: 'play', icon: Gamepad2, label: 'Play', cost: ACTION_COSTS.play.cost },
+    { id: 'clean', icon: Bath, label: 'Clean', cost: ACTION_COSTS.bath.cost },
+    { id: 'rest', icon: Moon, label: 'Rest', cost: 0 },
   ];
 
-  const stageInfo = EVOLUTION_STAGES[gameState.pet.evolutionStage];
+  // Health services
+  const healthServices = [
+    { id: 'checkup', service: VET_SERVICES.checkup, icon: Stethoscope },
+    { id: 'treatment', service: VET_SERVICES.treatment, icon: Pill },
+    { id: 'emergency', service: VET_SERVICES.emergency, icon: Siren },
+  ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background flex flex-col">
-      {/* Compact Header */}
-      <header className="sticky top-0 z-50 bg-background/90 backdrop-blur-lg border-b border-border">
-        <div className="container max-w-5xl mx-auto px-3 py-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-xl">🦎</span>
-              <div className="min-w-0">
-                <h1 className="font-display font-bold text-sm text-foreground truncate">
-                  {gameState.pet.name}
-                </h1>
-                <p className="text-[10px] text-muted-foreground">
-                  {stageInfo.name} • Day {gameState.pet.age + 1}
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <div className="px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20">
-                <span className="font-display font-bold text-primary text-sm">
-                  💰 ${gameState.finances.balance}
-                </span>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowResetConfirm(true)}
-                className="text-muted-foreground hover:text-destructive h-8 px-2"
-              >
-                ↻
+    <div 
+      className="min-h-screen flex flex-col p-3 overflow-hidden"
+      style={{
+        background: 'linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--background-dark)) 50%, hsl(var(--primary)/0.1) 100%)',
+      }}
+    >
+      {/* Top Bar: Coins + Badges + Reset */}
+      <div className="flex items-center justify-between mb-2">
+        {/* Coins */}
+        <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-500/20 to-amber-500/20 border border-yellow-500/30 rounded-full px-4 py-2">
+          <Coins className="w-5 h-5 text-yellow-500" />
+          <span className="font-display font-bold text-lg text-yellow-400">${finances.balance}</span>
+        </div>
+
+        {/* Badges count */}
+        <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-3 py-1.5">
+          <span className="text-lg">🏆</span>
+          <span className="font-semibold text-sm">{badges.length} badges</span>
+        </div>
+
+        {/* Reset */}
+        <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive">
+              <RotateCcw className="w-4 h-4" />
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reset Game?</DialogTitle>
+            </DialogHeader>
+            <p className="text-muted-foreground">This will delete all progress. Are you sure?</p>
+            <div className="flex gap-2 mt-4">
+              <Button variant="outline" onClick={() => setShowResetDialog(false)}>Cancel</Button>
+              <Button variant="destructive" onClick={() => { onReset(); setShowResetDialog(false); }}>
+                Reset Everything
               </Button>
             </div>
-          </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Stats Bar */}
+      <div className="mb-2">
+        <StatsDisplay stats={pet.stats} />
+      </div>
+
+      {/* Center: Pet with Background */}
+      <div 
+        className="flex-1 flex items-center justify-center relative min-h-[200px] max-h-[320px] rounded-2xl mx-auto w-full max-w-md overflow-hidden"
+        style={{
+          background: 'radial-gradient(ellipse at center, hsl(var(--primary)/0.15) 0%, transparent 70%)',
+        }}
+      >
+        {/* Decorative elements */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-4 left-4 text-2xl opacity-30 animate-float">🌿</div>
+          <div className="absolute top-8 right-6 text-xl opacity-25 animate-float" style={{ animationDelay: '0.5s' }}>🍃</div>
+          <div className="absolute bottom-8 left-8 text-lg opacity-20 animate-float" style={{ animationDelay: '1s' }}>🌺</div>
+          <div className="absolute bottom-4 right-4 text-xl opacity-25 animate-float" style={{ animationDelay: '0.3s' }}>🦋</div>
         </div>
-      </header>
 
-      {/* Main Content - Game Layout */}
-      <main className="flex-1 container max-w-5xl mx-auto px-3 py-3">
-        <div className="grid lg:grid-cols-5 gap-3 h-full">
-          
-          {/* Left Column - Pet & Stats (Compact) */}
-          <div className="lg:col-span-2 flex flex-col gap-3">
-            {/* Pet Display Card */}
-            <div className="bg-card rounded-2xl shadow-card border border-border p-3 flex-shrink-0">
-              <div 
-                className="rounded-xl p-4 transition-all duration-700 flex items-center justify-center"
-                style={{
-                  background: `linear-gradient(180deg, ${gameState.pet.color}15 0%, ${gameState.pet.color}05 100%)`,
-                  minHeight: '180px',
-                }}
-              >
-                <Chameleon
-                  mood={gameState.pet.mood}
-                  color={gameState.pet.color}
-                  name={gameState.pet.name}
-                  type={gameState.pet.type}
-                  evolutionStage={gameState.pet.evolutionStage}
-                  reaction={gameState.pet.currentReaction}
-                />
-              </div>
-              
-              {/* Quick mood status */}
-              <div className="mt-2 text-center">
-                <span 
-                  className="inline-block px-3 py-1 rounded-full font-display font-semibold text-xs capitalize"
-                  style={{
-                    backgroundColor: `${gameState.pet.color}20`,
-                    color: gameState.pet.color,
-                  }}
-                >
-                  {gameState.pet.mood === 'happy' && '😊 Happy'}
-                  {gameState.pet.mood === 'sad' && '😢 Sad'}
-                  {gameState.pet.mood === 'sick' && '🤒 Sick'}
-                  {gameState.pet.mood === 'energetic' && '⚡ Energetic'}
-                  {gameState.pet.mood === 'tired' && '😴 Tired'}
-                  {gameState.pet.mood === 'neutral' && '😐 Okay'}
-                  {gameState.pet.mood === 'hungry' && '🍽️ Hungry'}
-                  {gameState.pet.mood === 'dirty' && '🫧 Needs Bath'}
-                </span>
-              </div>
-            </div>
+        {/* Branch/perch */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-48 h-3 bg-gradient-to-r from-amber-800/60 via-amber-700/80 to-amber-800/60 rounded-full" />
 
-            {/* Stats Panel (Compact) */}
-            <div className="bg-card rounded-2xl shadow-card border border-border p-3">
-              <StatsDisplay stats={gameState.pet.stats} compact />
-            </div>
-          </div>
+        {/* Chameleon */}
+        <Chameleon
+          mood={pet.mood}
+          color={pet.color}
+          name={pet.name}
+          type={pet.type}
+          evolutionStage={pet.evolutionStage}
+          reaction={pet.currentReaction}
+          className="w-full max-w-[280px]"
+        />
+      </div>
 
-          {/* Right Column - Tabbed Content */}
-          <div className="lg:col-span-3 flex flex-col gap-2">
-            {/* Tab Navigation */}
-            <div className="flex gap-1 p-1 bg-muted/50 rounded-xl shrink-0">
-              {tabs.map((tab) => (
+      {/* Tab Navigation */}
+      <div className="flex gap-1 justify-center my-2">
+        {(['care', 'health', 'earn', 'tricks'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+              activeTab === tab
+                ? 'bg-primary text-primary-foreground shadow-md'
+                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            {tab === 'care' && '🍎 Care'}
+            {tab === 'health' && '💊 Health'}
+            {tab === 'earn' && '💰 Earn'}
+            {tab === 'tricks' && '🎪 Tricks'}
+          </button>
+        ))}
+      </div>
+
+      {/* Action Panel */}
+      <div className="bg-card/60 backdrop-blur-sm rounded-2xl border border-border/40 p-3 min-h-[120px]">
+        {/* Care Tab */}
+        {activeTab === 'care' && (
+          <div className="grid grid-cols-5 gap-2">
+            {careActions.map((action) => {
+              const canAfford = finances.balance >= action.cost;
+              const IconComponent = action.icon;
+              return (
                 <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-display font-semibold text-sm transition-all duration-200",
-                    activeTab === tab.id
-                      ? "bg-card shadow-sm text-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                  )}
+                  key={action.id}
+                  onClick={() => onAction(action.id)}
+                  disabled={!canAfford && action.cost > 0}
+                  className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${
+                    canAfford || action.cost === 0
+                      ? 'bg-primary/10 hover:bg-primary/20 hover:scale-105 active:scale-95 border border-primary/20'
+                      : 'bg-muted/30 opacity-50 cursor-not-allowed border border-muted/20'
+                  }`}
                 >
-                  <span className="text-base">{tab.icon}</span>
-                  <span className="hidden sm:inline">{tab.label}</span>
+                  <IconComponent className="w-6 h-6 text-primary" />
+                  <span className="text-xs font-medium">{action.label}</span>
+                  {action.cost > 0 && (
+                    <span className="text-[10px] text-muted-foreground">${action.cost}</span>
+                  )}
                 </button>
-              ))}
-            </div>
+              );
+            })}
+          </div>
+        )}
 
-            {/* Tab Content */}
-            <div className="bg-card rounded-2xl shadow-card border border-border p-4 flex-1 overflow-auto">
-              {activeTab === 'care' && (
-                <ActionButtons
-                  onAction={onAction}
-                  balance={gameState.finances.balance}
-                />
-              )}
-
-              {activeTab === 'health' && (
-                <HealthcarePanel
-                  health={gameState.pet.stats.health}
-                  balance={gameState.finances.balance}
-                  vetHistory={gameState.pet.vetHistory}
-                  lastVetVisit={gameState.pet.lastVetVisit}
-                  onVetService={onVetService}
-                />
-              )}
-
-              {activeTab === 'money' && (
-                <div className="grid md:grid-cols-2 gap-4">
-                  <ChoresPanel onCompleteChore={onEarnMoney} />
-                  <FinancePanel finances={gameState.finances} />
-                </div>
-              )}
-
-              {activeTab === 'progress' && (
-                <div className="space-y-4">
-                  <TricksPanel
-                    learnedTricks={gameState.pet.tricks}
-                    energy={gameState.pet.stats.energy}
-                    onTeachTrick={onTeachTrick}
-                  />
-                  <div className="border-t border-border pt-4">
-                    <BadgesPanel earnedBadges={gameState.badges} />
+        {/* Health Tab */}
+        {activeTab === 'health' && (
+          <div className="grid grid-cols-3 gap-2">
+            {healthServices.map(({ id, service, icon: IconComponent }) => {
+              const canAfford = finances.balance >= service.cost;
+              return (
+                <button
+                  key={id}
+                  onClick={() => onVetService(id as 'checkup' | 'treatment' | 'emergency')}
+                  disabled={!canAfford}
+                  className={`flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all ${
+                    canAfford
+                      ? 'bg-stat-health/10 hover:bg-stat-health/20 hover:scale-105 active:scale-95 border border-stat-health/30'
+                      : 'bg-muted/30 opacity-50 cursor-not-allowed border border-muted/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <IconComponent className="w-5 h-5 text-stat-health" />
+                    <span className="text-lg">{service.icon}</span>
                   </div>
-                </div>
+                  <span className="text-sm font-medium">{service.name}</span>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>${service.cost}</span>
+                    <span className="text-stat-health">+{service.healthBoost} HP</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Earn Tab */}
+        {activeTab === 'earn' && (
+          <div className="grid grid-cols-3 gap-2">
+            {AVAILABLE_CHORES.slice(0, 6).map((chore) => {
+              const timeLeft = getChoreTimeLeft(chore);
+              const isReady = timeLeft === 0;
+              return (
+                <button
+                  key={chore.id}
+                  onClick={() => handleChore(chore)}
+                  disabled={!isReady}
+                  className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${
+                    isReady
+                      ? 'bg-yellow-500/10 hover:bg-yellow-500/20 hover:scale-105 active:scale-95 border border-yellow-500/30'
+                      : 'bg-muted/30 opacity-60 cursor-not-allowed border border-muted/20'
+                  }`}
+                >
+                  <span className="text-xl">{chore.icon}</span>
+                  <span className="text-xs font-medium text-center leading-tight">{chore.name}</span>
+                  {isReady ? (
+                    <span className="text-[10px] text-yellow-500 font-semibold">+${chore.reward}</span>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground">{timeLeft}m</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Tricks Tab */}
+        {activeTab === 'tricks' && (
+          <div className="space-y-2">
+            <div className="flex gap-1 flex-wrap justify-center mb-2">
+              {pet.tricks.length > 0 ? (
+                pet.tricks.map((trick) => (
+                  <span
+                    key={trick}
+                    className="px-2 py-0.5 bg-primary/20 rounded-full text-xs font-medium text-primary"
+                  >
+                    ✓ {trick}
+                  </span>
+                ))
+              ) : (
+                <span className="text-xs text-muted-foreground">No tricks learned yet</span>
               )}
             </div>
-
-            {/* Quick Help */}
-            <details className="bg-primary/5 rounded-xl border border-primary/20 p-3 shrink-0">
-              <summary className="flex items-center justify-between cursor-pointer list-none text-sm">
-                <span className="font-display font-semibold text-primary">📖 How to Play</span>
-                <span className="text-primary text-xs">▼</span>
-              </summary>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                <div className="p-2 bg-card rounded-lg">
-                  <span className="font-semibold text-foreground">❤️ Care:</span> Feed, play, clean
-                </div>
-                <div className="p-2 bg-card rounded-lg">
-                  <span className="font-semibold text-foreground">🩺 Health:</span> Vet visits
-                </div>
-                <div className="p-2 bg-card rounded-lg">
-                  <span className="font-semibold text-foreground">💰 Money:</span> Chores → earnings
-                </div>
-                <div className="p-2 bg-card rounded-lg">
-                  <span className="font-semibold text-foreground">📈 Grow:</span> Stats → evolution
-                </div>
-              </div>
-            </details>
-          </div>
-        </div>
-      </main>
-
-      {/* Reset Confirmation Modal */}
-      {showResetConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/20 backdrop-blur-sm">
-          <div className="bg-card rounded-2xl shadow-xl border-2 border-border p-5 max-w-sm w-full animate-scale-in">
-            <h3 className="font-display font-bold text-lg text-foreground mb-2">
-              Reset Game?
-            </h3>
-            <p className="text-sm text-muted-foreground mb-5">
-              This will delete all progress. This cannot be undone.
-            </p>
-            <div className="flex gap-3">
-              <Button
-                variant="subtle"
-                className="flex-1"
-                onClick={() => setShowResetConfirm(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                className="flex-1"
-                onClick={() => {
-                  onReset();
-                  setShowResetConfirm(false);
-                }}
-              >
-                Reset
-              </Button>
+            <div className="grid grid-cols-5 gap-2">
+              {AVAILABLE_TRICKS.map((trick) => {
+                const isLearned = pet.tricks.includes(trick.name);
+                const hasEnergy = pet.stats.energy >= trick.energy;
+                return (
+                  <button
+                    key={trick.name}
+                    onClick={() => onTeachTrick(trick.name)}
+                    disabled={isLearned || !hasEnergy}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${
+                      isLearned
+                        ? 'bg-primary/20 border border-primary/40'
+                        : hasEnergy
+                        ? 'bg-accent/10 hover:bg-accent/20 hover:scale-105 active:scale-95 border border-accent/30'
+                        : 'bg-muted/30 opacity-50 cursor-not-allowed border border-muted/20'
+                    }`}
+                  >
+                    <span className="text-lg">{trick.icon}</span>
+                    <span className="text-[10px] font-medium text-center">{trick.name}</span>
+                    {!isLearned && (
+                      <span className="text-[9px] text-muted-foreground">⚡{trick.energy}</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Minimal Footer */}
-      <footer className="border-t border-border py-2 shrink-0">
-        <p className="text-center text-[10px] text-muted-foreground">
-          Virtual Chameleon Pet • FBLA 2025
-        </p>
-      </footer>
+      {/* Spent tracker */}
+      <div className="flex justify-center gap-4 mt-2 text-xs text-muted-foreground">
+        <span>Total Spent: ${finances.totalSpent}</span>
+        <span>•</span>
+        <span>Total Earned: ${finances.totalEarned}</span>
+      </div>
     </div>
   );
 }

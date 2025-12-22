@@ -16,6 +16,7 @@ const Index = () => {
     initializePet,
     performAction,
     earnMoney,
+    performVetService,
     teachTrick,
     resetGame,
   } = useGameState();
@@ -31,6 +32,7 @@ const Index = () => {
       gameState={gameState}
       onAction={performAction}
       onEarnMoney={earnMoney}
+      onVetService={performVetService}
       onTeachTrick={teachTrick}
       onReset={resetGame}
     />
