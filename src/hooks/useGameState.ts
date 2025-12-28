@@ -15,9 +15,11 @@ import {
   VetRecord,
   ChameleonType,
   ReactionType,
+  TankEnvironment,
   AVAILABLE_BADGES,
   CHAMELEON_TYPES,
   VET_SERVICES,
+  OPTIMAL_TEMP,
   calculateMood,
   getMoodColor,
   ACTION_COSTS,
@@ -58,6 +60,7 @@ function createInitialPet(name: string, type: ChameleonType): Pet {
     currentReaction: 'none',
     vetHistory: [],
     lastVetVisit: undefined,
+    tankEnvironment: { temperature: 80 }, // Start at optimal temperature
   };
 }
 
@@ -111,6 +114,7 @@ export function useGameState() {
         parsed.totalPlayTime = parsed.totalPlayTime || 0;
         parsed.pet.currentReaction = parsed.pet.currentReaction || 'none';
         parsed.pet.type = parsed.pet.type || 'veiled';
+        parsed.pet.tankEnvironment = parsed.pet.tankEnvironment || { temperature: 80 };
         return parsed;
       } catch {
         return createInitialGameState();
@@ -145,19 +149,23 @@ export function useGameState() {
     }, 1500);
   }, []);
 
-  // Stat decay over time
+  // Stat decay over time - affected by temperature
   useEffect(() => {
     if (gameState.isFirstTime) return;
 
     const interval = setInterval(() => {
       setGameState(prev => {
+        const temp = prev.pet.tankEnvironment.temperature;
+        const isOptimalTemp = temp >= OPTIMAL_TEMP.min && temp <= OPTIMAL_TEMP.max;
+        const tempPenalty = isOptimalTemp ? 0 : Math.abs(temp - (temp < OPTIMAL_TEMP.min ? OPTIMAL_TEMP.min : OPTIMAL_TEMP.max)) * 0.2;
+        
         const newStats: PetStats = {
           hunger: Math.max(0, prev.pet.stats.hunger - 2),
-          happiness: Math.max(0, prev.pet.stats.happiness - 1),
+          happiness: Math.max(0, prev.pet.stats.happiness - 1 - (isOptimalTemp ? 0 : 1)),
           health: prev.pet.stats.hunger < 20 || prev.pet.stats.cleanliness < 20 
-            ? Math.max(0, prev.pet.stats.health - 3) 
-            : Math.max(0, prev.pet.stats.health - 0.5),
-          energy: Math.max(0, prev.pet.stats.energy - 1),
+            ? Math.max(0, prev.pet.stats.health - 3 - tempPenalty) 
+            : Math.max(0, prev.pet.stats.health - 0.5 - tempPenalty),
+          energy: Math.max(0, prev.pet.stats.energy - 1 - (temp > OPTIMAL_TEMP.max ? 0.5 : 0)),
           cleanliness: Math.max(0, prev.pet.stats.cleanliness - 1.5),
         };
 
@@ -608,6 +616,30 @@ export function useGameState() {
     return true;
   }, [gameState.pet, setReaction]);
 
+  // Set tank temperature
+  const setTemperature = useCallback((temperature: number) => {
+    const clampedTemp = Math.max(65, Math.min(95, temperature));
+    
+    setGameState(prev => ({
+      ...prev,
+      pet: {
+        ...prev.pet,
+        tankEnvironment: { ...prev.pet.tankEnvironment, temperature: clampedTemp },
+      },
+    }));
+
+    // Check if temperature is optimal and show feedback
+    const isOptimal = clampedTemp >= OPTIMAL_TEMP.min && clampedTemp <= OPTIMAL_TEMP.max;
+    if (!isOptimal) {
+      const isTooHot = clampedTemp > OPTIMAL_TEMP.max;
+      toast({
+        title: isTooHot ? "🌡️ Too Hot!" : "❄️ Too Cold!",
+        description: `Optimal temperature is ${OPTIMAL_TEMP.min}°F - ${OPTIMAL_TEMP.max}°F`,
+        variant: "destructive",
+      });
+    }
+  }, []);
+
   // Reset game
   const resetGame = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
@@ -627,6 +659,7 @@ export function useGameState() {
     performAction,
     performVetService,
     teachTrick,
+    setTemperature,
     resetGame,
   };
 }

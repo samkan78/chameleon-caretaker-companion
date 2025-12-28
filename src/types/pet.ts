@@ -59,6 +59,15 @@ export interface PetStats {
   cleanliness: number; // 0-100, higher = cleaner
 }
 
+// Tank environment settings
+export interface TankEnvironment {
+  temperature: number; // 65-95°F range, optimal 75-85°F
+}
+
+// Optimal temperature range for chameleons
+export const OPTIMAL_TEMP = { min: 75, max: 85 };
+export const TEMP_RANGE = { min: 65, max: 95 };
+
 // Individual expense record for tracking costs
 export interface Expense {
   id: string;
@@ -113,6 +122,7 @@ export interface Pet {
   currentReaction: ReactionType;
   vetHistory: VetRecord[];
   lastVetVisit?: Date;
+  tankEnvironment: TankEnvironment; // Tank settings
 }
 
 // Player/user financial state
