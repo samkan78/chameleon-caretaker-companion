@@ -5,12 +5,13 @@
  */
 
 import { useState } from 'react';
-import { GameState, ACTION_COSTS, AVAILABLE_CHORES, VET_SERVICES } from '@/types/pet';
+import { GameState, ACTION_COSTS, AVAILABLE_CHORES, VET_SERVICES, OPTIMAL_TEMP, TEMP_RANGE } from '@/types/pet';
 import { Chameleon } from './Chameleon';
 import { StatsDisplay } from './StatsDisplay';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Coins, RotateCcw, Sparkles, Heart, Utensils, Gamepad2, Bath, Moon, Stethoscope, Siren, Pill } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { Coins, RotateCcw, Sparkles, Heart, Utensils, Gamepad2, Bath, Moon, Stethoscope, Siren, Pill, Thermometer, Minus, Plus } from 'lucide-react';
 
 export interface GameDashboardProps {
   gameState: GameState;
@@ -18,6 +19,7 @@ export interface GameDashboardProps {
   onEarnMoney: (amount: number, choreId: string) => void;
   onVetService: (serviceType: 'checkup' | 'vaccination' | 'treatment' | 'emergency') => boolean;
   onTeachTrick: (trickName: string) => boolean;
+  onSetTemperature: (temp: number) => void;
   onReset: () => void;
 }
 
@@ -36,11 +38,13 @@ export function GameDashboard({
   onEarnMoney,
   onVetService,
   onTeachTrick,
+  onSetTemperature,
   onReset,
 }: GameDashboardProps) {
   const { pet, finances, badges } = gameState;
   const [activeTab, setActiveTab] = useState<'care' | 'health' | 'earn' | 'tricks'>('care');
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const [showTempControl, setShowTempControl] = useState(false);
 
   // Chore cooldown tracking
   const [choreCooldowns, setChoreCooldowns] = useState<Record<string, number>>({});
@@ -64,14 +68,18 @@ export function GameDashboard({
     return Math.ceil(timeLeft / 60000);
   };
 
-  // Care actions configuration
+  // Care actions configuration (removed temp since it has its own UI)
   const careActions = [
     { id: 'feed', icon: Utensils, label: 'Feed', cost: ACTION_COSTS.feed.cost },
     { id: 'treat', icon: Sparkles, label: 'Treat', cost: ACTION_COSTS.treat.cost },
     { id: 'play', icon: Gamepad2, label: 'Play', cost: ACTION_COSTS.play.cost },
     { id: 'clean', icon: Bath, label: 'Clean', cost: ACTION_COSTS.bath.cost },
-    { id: 'rest', icon: Moon, label: 'Rest', cost: 0 },
   ];
+
+  // Temperature status
+  const currentTemp = pet.tankEnvironment.temperature;
+  const isOptimalTemp = currentTemp >= OPTIMAL_TEMP.min && currentTemp <= OPTIMAL_TEMP.max;
+  const tempStatus = currentTemp < OPTIMAL_TEMP.min ? 'cold' : currentTemp > OPTIMAL_TEMP.max ? 'hot' : 'optimal';
 
   // Health services
   const healthServices = [
@@ -182,29 +190,93 @@ export function GameDashboard({
       <div className="bg-card/60 backdrop-blur-sm rounded-2xl border border-border/40 p-3 min-h-[120px]">
         {/* Care Tab */}
         {activeTab === 'care' && (
-          <div className="grid grid-cols-5 gap-2">
-            {careActions.map((action) => {
-              const canAfford = finances.balance >= action.cost;
-              const IconComponent = action.icon;
-              return (
+          <div className="space-y-3">
+            {/* Care action buttons */}
+            <div className="grid grid-cols-5 gap-2">
+              {careActions.map((action) => {
+                const canAfford = finances.balance >= action.cost;
+                const IconComponent = action.icon;
+                return (
+                  <button
+                    key={action.id}
+                    onClick={() => onAction(action.id)}
+                    disabled={!canAfford && action.cost > 0}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${
+                      canAfford || action.cost === 0
+                        ? 'bg-primary/10 hover:bg-primary/20 hover:scale-105 active:scale-95 border border-primary/20'
+                        : 'bg-muted/30 opacity-50 cursor-not-allowed border border-muted/20'
+                    }`}
+                  >
+                    <IconComponent className="w-5 h-5 text-primary" />
+                    <span className="text-[10px] font-medium">{action.label}</span>
+                    {action.cost > 0 && (
+                      <span className="text-[9px] text-muted-foreground">${action.cost}</span>
+                    )}
+                  </button>
+                );
+              })}
+              {/* Rest button */}
+              <button
+                onClick={() => onAction('rest')}
+                className="flex flex-col items-center gap-1 p-2 rounded-xl transition-all bg-primary/10 hover:bg-primary/20 hover:scale-105 active:scale-95 border border-primary/20"
+              >
+                <Moon className="w-5 h-5 text-primary" />
+                <span className="text-[10px] font-medium">Rest</span>
+              </button>
+            </div>
+
+            {/* Temperature Control */}
+            <div className={`flex items-center gap-3 p-2 rounded-xl border ${
+              isOptimalTemp 
+                ? 'bg-stat-health/10 border-stat-health/30' 
+                : tempStatus === 'hot' 
+                  ? 'bg-red-500/10 border-red-500/30' 
+                  : 'bg-blue-500/10 border-blue-500/30'
+            }`}>
+              <Thermometer className={`w-5 h-5 ${
+                isOptimalTemp ? 'text-stat-health' : tempStatus === 'hot' ? 'text-red-500' : 'text-blue-500'
+              }`} />
+              
+              <div className="flex-1 flex items-center gap-2">
                 <button
-                  key={action.id}
-                  onClick={() => onAction(action.id)}
-                  disabled={!canAfford && action.cost > 0}
-                  className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${
-                    canAfford || action.cost === 0
-                      ? 'bg-primary/10 hover:bg-primary/20 hover:scale-105 active:scale-95 border border-primary/20'
-                      : 'bg-muted/30 opacity-50 cursor-not-allowed border border-muted/20'
-                  }`}
+                  onClick={() => onSetTemperature(currentTemp - 5)}
+                  disabled={currentTemp <= TEMP_RANGE.min}
+                  className="p-1 rounded-md bg-background/50 hover:bg-background/80 disabled:opacity-50"
                 >
-                  <IconComponent className="w-6 h-6 text-primary" />
-                  <span className="text-xs font-medium">{action.label}</span>
-                  {action.cost > 0 && (
-                    <span className="text-[10px] text-muted-foreground">${action.cost}</span>
-                  )}
+                  <Minus className="w-4 h-4" />
                 </button>
-              );
-            })}
+                
+                <div className="flex-1">
+                  <Slider
+                    value={[currentTemp]}
+                    min={TEMP_RANGE.min}
+                    max={TEMP_RANGE.max}
+                    step={1}
+                    onValueChange={(value) => onSetTemperature(value[0])}
+                    className="flex-1"
+                  />
+                </div>
+                
+                <button
+                  onClick={() => onSetTemperature(currentTemp + 5)}
+                  disabled={currentTemp >= TEMP_RANGE.max}
+                  className="p-1 rounded-md bg-background/50 hover:bg-background/80 disabled:opacity-50"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <div className="text-right min-w-[60px]">
+                <span className={`font-bold text-sm ${
+                  isOptimalTemp ? 'text-stat-health' : tempStatus === 'hot' ? 'text-red-500' : 'text-blue-500'
+                }`}>
+                  {currentTemp}°F
+                </span>
+                <div className="text-[9px] text-muted-foreground">
+                  {isOptimalTemp ? '✓ Optimal' : tempStatus === 'hot' ? '⚠ Hot' : '⚠ Cold'}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
